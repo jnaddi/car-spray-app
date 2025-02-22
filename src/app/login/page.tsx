@@ -113,9 +113,23 @@ export default function LoginPage() {
         timestamp: new Date().toISOString(),
       })
 
+      console.log("Login attempt configuration:", {
+        supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+        hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        email: credentials.email,
+        timestamp: new Date().toISOString(),
+      })
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email: credentials.email,
         password: credentials.password,
+      })
+
+      console.log("Auth response:", {
+        hasData: !!data,
+        hasUser: !!data?.user,
+        hasError: !!error,
+        timestamp: new Date().toISOString(),
       })
 
       if (error) {
