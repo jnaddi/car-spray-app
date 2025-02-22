@@ -122,7 +122,6 @@ export default function LoginPage() {
         console.error("Authentication error:", {
           code: error.status,
           message: error.message,
-          details: error.details,
           timestamp: new Date().toISOString(),
         })
 
