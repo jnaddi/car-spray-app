@@ -69,10 +69,9 @@ export default function LoginPage() {
           toast.success("Login successful!")
           console.log("Attempting navigation to dashboard...")
           
-          // Try both navigation methods
           try {
-            router.push('/dashboard')
-          } catch (navError) {
+            await router.push('/dashboard')
+          } catch {
             console.log("Router navigation failed, trying window.location...")
             window.location.href = '/dashboard'
           }
