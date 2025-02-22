@@ -22,6 +22,7 @@ export default function LoginPage() {
     email: "",
     password: "",
   })
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string>("")
   const router = useRouter()
 
@@ -35,29 +36,40 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    setIsLoading(true)
     setError("")
 
     try {
+      console.log("Supabase client initialized:", !!supabase)
+      console.log("Attempting login with email:", credentials.email)
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email: credentials.email,
         password: credentials.password,
       })
 
+      console.log("Auth response:", { hasData: !!data, hasError: !!error })
+
       if (error) {
+        console.error("Login error details:", error)
         throw error
       }
 
       if (data.user) {
+        console.log("Login successful, redirecting to dashboard")
         toast.success("Login successful!")
         router.push("/dashboard")
       }
     } catch (err) {
+      console.error("Login error full details:", err)
       if (err instanceof Error) {
         setError(err.message)
       } else {
         setError("An error occurred during login")
       }
       toast.error("Login failed")
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -84,6 +96,7 @@ export default function LoginPage() {
                 placeholder="Enter your email"
                 value={credentials.email}
                 onChange={handleChange}
+                disabled={isLoading}
               />
             </div>
             <div className="space-y-2">
@@ -96,12 +109,13 @@ export default function LoginPage() {
                 placeholder="Enter your password"
                 value={credentials.password}
                 onChange={handleChange}
+                disabled={isLoading}
               />
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
-            <Button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white">
+            <Button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white" disabled={isLoading}>
               <Lock className="w-4 h-4 mr-2" />
-              Login
+              {isLoading ? "Logging in..." : "Login"}
             </Button>
           </form>
         </CardContent>
