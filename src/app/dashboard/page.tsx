@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import CarSprayApp from "@/components/CarSprayApp"
 import { toast } from "react-toastify"
+import { PostgrestError } from "@supabase/supabase-js"
 
 interface Customer {
   id: number
@@ -61,7 +62,6 @@ export default function DashboardPage() {
   useEffect(() => {
     const checkAuthAndFetchData = async () => {
       try {
-        // Check if user is authenticated
         const { data: { session }, error: authError } = await supabase.auth.getSession()
         
         if (authError) throw authError
@@ -71,36 +71,43 @@ export default function DashboardPage() {
           return
         }
 
-        // Fetch all data in parallel
+        // Fetch all data in parallel with proper typing
         const [
           { data: customers, error: customersError },
           { data: inventory, error: inventoryError },
           { data: invoices, error: invoicesError }
         ] = await Promise.all([
-          supabase.from("customers").select("*") as Promise<{ data: Customer[] | null, error: any }>,
-          supabase.from("inventory").select("*") as Promise<{ data: InventoryItem[] | null, error: any }>,
+          supabase.from("customers").select("*") as Promise<{ 
+            data: Customer[] | null
+            error: PostgrestError | null 
+          }>,
+          supabase.from("inventory").select("*") as Promise<{ 
+            data: InventoryItem[] | null
+            error: PostgrestError | null 
+          }>,
           supabase.from("invoices").select(`
             *,
             customers(name),
             services(description, price)
-          `) as Promise<{ data: Invoice[] | null, error: any }>
+          `) as Promise<{ 
+            data: Invoice[] | null
+            error: PostgrestError | null 
+          }>
         ])
 
-        // Check for any data fetching errors
         if (customersError) throw customersError
         if (inventoryError) throw inventoryError
         if (invoicesError) throw invoicesError
 
-        // Update state with fetched data
         setData({
           customers: customers || [],
           inventory: inventory || [],
           invoices: invoices || []
         })
 
-      } catch (err) {
-        console.error('Dashboard data loading error:', err)
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load dashboard data'
+      } catch (error) {
+        console.error('Dashboard data loading error:', error)
+        const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboard data'
         setError(errorMessage)
         toast.error(errorMessage)
       } finally {
@@ -115,13 +122,11 @@ export default function DashboardPage() {
       .channel('customers_changes')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'customers' },
-        (payload) => {
-          // Type assertion for payload.new as Customer
-          const newCustomer = payload.new as Customer
+        (payload: { new: Customer }) => {
           setData((prev) => ({
             ...prev,
             customers: prev.customers.map((customer) => 
-              customer.id === newCustomer.id ? newCustomer : customer
+              customer.id === payload.new.id ? payload.new : customer
             )
           }))
         }
@@ -132,13 +137,11 @@ export default function DashboardPage() {
       .channel('inventory_changes')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'inventory' },
-        (payload) => {
-          // Type assertion for payload.new as InventoryItem
-          const newItem = payload.new as InventoryItem
+        (payload: { new: InventoryItem }) => {
           setData((prev) => ({
             ...prev,
             inventory: prev.inventory.map((item) => 
-              item.id === newItem.id ? newItem : item
+              item.id === payload.new.id ? payload.new : item
             )
           }))
         }
@@ -149,20 +152,17 @@ export default function DashboardPage() {
       .channel('invoices_changes')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'invoices' },
-        (payload) => {
-          // Type assertion for payload.new as Invoice
-          const newInvoice = payload.new as Invoice
+        (payload: { new: Invoice }) => {
           setData((prev) => ({
             ...prev,
             invoices: prev.invoices.map((invoice) => 
-              invoice.id === newInvoice.id ? newInvoice : invoice
+              invoice.id === payload.new.id ? payload.new : invoice
             )
           }))
         }
       )
       .subscribe()
 
-    // Cleanup subscriptions
     return () => {
       customersSubscription.unsubscribe()
       inventorySubscription.unsubscribe()
@@ -170,7 +170,6 @@ export default function DashboardPage() {
     }
   }, [router])
 
-  // Loading state
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -179,7 +178,6 @@ export default function DashboardPage() {
     )
   }
 
-  // Error state
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4">
