@@ -19,23 +19,33 @@ export default function LoginPage() {
     email: "",
     password: "",
   })
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string>("")
 
-  // Check if user is already logged in
+  // Check session only once on mount
   useEffect(() => {
+    let mounted = true
+
     const checkAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        if (session?.user) {
+        if (mounted && session?.user) {
           window.location.href = "/dashboard"
         }
       } catch (error) {
         console.error("Auth check failed:", error)
+      } finally {
+        if (mounted) {
+          setIsLoading(false)
+        }
       }
     }
     
     checkAuth()
+
+    return () => {
+      mounted = false
+    }
   }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -44,7 +54,6 @@ export default function LoginPage() {
       ...prev,
       [name]: value,
     }))
-    // Clear error when user starts typing
     if (error) setError("")
   }
 
@@ -54,17 +63,13 @@ export default function LoginPage() {
     setError("")
 
     try {
-      // Validate email format
       if (!credentials.email.includes('@')) {
         setError("Please enter a valid email address")
-        setIsLoading(false)
         return
       }
 
-      // Validate password length
       if (credentials.password.length < 6) {
         setError("Password must be at least 6 characters long")
-        setIsLoading(false)
         return
       }
 
@@ -73,29 +78,17 @@ export default function LoginPage() {
         password: credentials.password,
       })
 
-      if (signInError) {
-        throw signInError
-      }
+      if (signInError) throw signInError
 
       if (data.user) {
         toast.success("Login successful!")
-        
-        // Verify session
-        const { data: { session } } = await supabase.auth.getSession()
-        
-        if (session) {
-          // Check for redirect URL from middleware
-          const params = new URLSearchParams(window.location.search)
-          const redirectTo = params.get('redirectTo') || '/dashboard'
-          window.location.href = redirectTo
-        } else {
-          throw new Error("Session not established")
-        }
+        const params = new URLSearchParams(window.location.search)
+        const redirectTo = params.get('redirectTo') || '/dashboard'
+        window.location.href = redirectTo
       }
     } catch (err) {
       console.error("Login error:", err)
       
-      // Handle specific error messages
       if (err instanceof Error) {
         if (err.message.includes("Invalid login credentials")) {
           setError("Invalid email or password")
@@ -114,6 +107,14 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-red-600"></div>
+      </div>
+    )
   }
 
   return (
