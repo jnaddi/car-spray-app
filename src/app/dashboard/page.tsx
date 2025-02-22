@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import CarSprayApp from "@/components/CarSprayApp"
 import { toast } from "react-toastify"
+import { RealtimeChannel } from '@supabase/supabase-js'
 
 interface Customer {
   id: number
@@ -59,6 +60,10 @@ export default function DashboardPage() {
   })
 
   useEffect(() => {
+    let customersChannel: RealtimeChannel
+    let inventoryChannel: RealtimeChannel
+    let invoicesChannel: RealtimeChannel
+
     const checkAuthAndFetchData = async () => {
       try {
         const { data: { session }, error: authError } = await supabase.auth.getSession()
@@ -99,6 +104,55 @@ export default function DashboardPage() {
           invoices: (invoices as Invoice[]) || []
         })
 
+        // Set up real-time subscriptions after initial data fetch
+        customersChannel = supabase.channel('customers')
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'customers'
+          }, (payload) => {
+            const newCustomer = payload.new as Customer
+            setData(prev => ({
+              ...prev,
+              customers: prev.customers.map(customer => 
+                customer.id === newCustomer.id ? newCustomer : customer
+              )
+            }))
+          })
+          .subscribe()
+
+        inventoryChannel = supabase.channel('inventory')
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'inventory'
+          }, (payload) => {
+            const newItem = payload.new as InventoryItem
+            setData(prev => ({
+              ...prev,
+              inventory: prev.inventory.map(item => 
+                item.id === newItem.id ? newItem : item
+              )
+            }))
+          })
+          .subscribe()
+
+        invoicesChannel = supabase.channel('invoices')
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'invoices'
+          }, (payload) => {
+            const newInvoice = payload.new as Invoice
+            setData(prev => ({
+              ...prev,
+              invoices: prev.invoices.map(invoice => 
+                invoice.id === newInvoice.id ? newInvoice : invoice
+              )
+            }))
+          })
+          .subscribe()
+
       } catch (error) {
         console.error('Dashboard data loading error:', error)
         const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboard data'
@@ -111,56 +165,11 @@ export default function DashboardPage() {
 
     checkAuthAndFetchData()
 
-    // Set up real-time subscriptions
-    const customersSubscription = supabase
-      .channel('customers_changes')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'customers' },
-        (payload: { new: Customer }) => {
-          setData((prev) => ({
-            ...prev,
-            customers: prev.customers.map((customer) => 
-              customer.id === payload.new.id ? payload.new : customer
-            )
-          }))
-        }
-      )
-      .subscribe()
-
-    const inventorySubscription = supabase
-      .channel('inventory_changes')
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'inventory' },
-        (payload: { new: InventoryItem }) => {
-          setData((prev) => ({
-            ...prev,
-            inventory: prev.inventory.map((item) => 
-              item.id === payload.new.id ? payload.new : item
-            )
-          }))
-        }
-      )
-      .subscribe()
-
-    const invoicesSubscription = supabase
-      .channel('invoices_changes')
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'invoices' },
-        (payload: { new: Invoice }) => {
-          setData((prev) => ({
-            ...prev,
-            invoices: prev.invoices.map((invoice) => 
-              invoice.id === payload.new.id ? payload.new : invoice
-            )
-          }))
-        }
-      )
-      .subscribe()
-
+    // Cleanup function
     return () => {
-      customersSubscription.unsubscribe()
-      inventorySubscription.unsubscribe()
-      invoicesSubscription.unsubscribe()
+      if (customersChannel) customersChannel.unsubscribe()
+      if (inventoryChannel) inventoryChannel.unsubscribe()
+      if (invoicesChannel) invoicesChannel.unsubscribe()
     }
   }, [router])
 
