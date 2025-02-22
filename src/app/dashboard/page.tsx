@@ -1,5 +1,10 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import CarSprayApp from "@/components/CarSprayApp"
+import { toast } from "react-toastify"
 
 interface Customer {
   id: number
@@ -37,23 +42,161 @@ interface Invoice {
   services: Service[]
 }
 
-export default async function DashboardPage() {
-  const { data: customers } = (await supabase.from("customers").select("*")) as { data: Customer[] }
+interface DashboardData {
+  customers: Customer[]
+  inventory: InventoryItem[]
+  invoices: Invoice[]
+}
 
-  const { data: inventory } = (await supabase.from("inventory").select("*")) as { data: InventoryItem[] }
+export default function DashboardPage() {
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [data, setData] = useState<DashboardData>({
+    customers: [],
+    inventory: [],
+    invoices: []
+  })
 
-  const { data: invoices } = (await supabase.from("invoices").select(`
-      *,
-      customers(name),
-      services(description, price)
-    `)) as { data: Invoice[] }
+  useEffect(() => {
+    const checkAuthAndFetchData = async () => {
+      try {
+        // Check if user is authenticated
+        const { data: { session }, error: authError } = await supabase.auth.getSession()
+        
+        if (authError) throw authError
+        
+        if (!session) {
+          router.replace('/login')
+          return
+        }
 
+        // Fetch all data in parallel
+        const [
+          { data: customers, error: customersError },
+          { data: inventory, error: inventoryError },
+          { data: invoices, error: invoicesError }
+        ] = await Promise.all([
+          supabase.from("customers").select("*"),
+          supabase.from("inventory").select("*"),
+          supabase.from("invoices").select(`
+            *,
+            customers(name),
+            services(description, price)
+          `)
+        ])
+
+        // Check for any data fetching errors
+        if (customersError) throw customersError
+        if (inventoryError) throw inventoryError
+        if (invoicesError) throw invoicesError
+
+        // Update state with fetched data
+        setData({
+          customers: customers || [],
+          inventory: inventory || [],
+          invoices: invoices || []
+        })
+
+      } catch (err) {
+        console.error('Dashboard data loading error:', err)
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load dashboard data'
+        setError(errorMessage)
+        toast.error(errorMessage)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    checkAuthAndFetchData()
+
+    // Set up real-time subscriptions
+    const customersSubscription = supabase
+      .channel('customers_changes')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'customers' 
+      }, payload => {
+        setData(prev => ({
+          ...prev,
+          customers: prev.customers.map(customer => 
+            customer.id === payload.new.id ? payload.new : customer
+          )
+        }))
+      })
+      .subscribe()
+
+    const inventorySubscription = supabase
+      .channel('inventory_changes')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'inventory' 
+      }, payload => {
+        setData(prev => ({
+          ...prev,
+          inventory: prev.inventory.map(item => 
+            item.id === payload.new.id ? payload.new : item
+          )
+        }))
+      })
+      .subscribe()
+
+    const invoicesSubscription = supabase
+      .channel('invoices_changes')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'invoices' 
+      }, payload => {
+        setData(prev => ({
+          ...prev,
+          invoices: prev.invoices.map(invoice => 
+            invoice.id === payload.new.id ? payload.new : invoice
+          )
+        }))
+      })
+      .subscribe()
+
+    // Cleanup subscriptions
+    return () => {
+      customersSubscription.unsubscribe()
+      inventorySubscription.unsubscribe()
+      invoicesSubscription.unsubscribe()
+    }
+  }, [router])
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-red-600"></div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <div className="text-red-600 text-xl mb-4">Error loading dashboard</div>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  // Render main dashboard
   return (
     <CarSprayApp
-      initialCustomers={customers || []}
-      initialInventory={inventory || []}
-      initialInvoices={invoices || []}
+      initialCustomers={data.customers}
+      initialInventory={data.inventory}
+      initialInvoices={data.invoices}
     />
   )
 }
-
