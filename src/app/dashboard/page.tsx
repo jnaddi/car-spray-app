@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import CarSprayApp from "@/components/CarSprayApp"
 import { toast } from "react-toastify"
@@ -50,7 +49,6 @@ interface DashboardData {
 }
 
 export default function DashboardPage() {
-  const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<DashboardData>({
@@ -60,20 +58,25 @@ export default function DashboardPage() {
   })
 
   useEffect(() => {
+    let mounted = true
     let customersChannel: RealtimeChannel
     let inventoryChannel: RealtimeChannel
     let invoicesChannel: RealtimeChannel
 
     const checkAuthAndFetchData = async () => {
       try {
+        console.log("Checking session...")
         const { data: { session }, error: authError } = await supabase.auth.getSession()
         
         if (authError) throw authError
         
         if (!session) {
-          router.replace('/login')
+          console.log("No session found, redirecting to login...")
+          window.location.replace('/login')
           return
         }
+
+        console.log("Session found, fetching data...")
 
         // Fetch all data with proper typing
         const customersPromise = supabase.from("customers").select("*")
@@ -98,6 +101,8 @@ export default function DashboardPage() {
         if (inventoryError) throw inventoryError
         if (invoicesError) throw invoicesError
 
+        if (!mounted) return
+
         setData({
           customers: (customers as Customer[]) || [],
           inventory: (inventory as InventoryItem[]) || [],
@@ -111,6 +116,7 @@ export default function DashboardPage() {
             schema: 'public',
             table: 'customers'
           }, (payload) => {
+            if (!mounted) return
             const newCustomer = payload.new as Customer
             setData(prev => ({
               ...prev,
@@ -127,6 +133,7 @@ export default function DashboardPage() {
             schema: 'public',
             table: 'inventory'
           }, (payload) => {
+            if (!mounted) return
             const newItem = payload.new as InventoryItem
             setData(prev => ({
               ...prev,
@@ -143,6 +150,7 @@ export default function DashboardPage() {
             schema: 'public',
             table: 'invoices'
           }, (payload) => {
+            if (!mounted) return
             const newInvoice = payload.new as Invoice
             setData(prev => ({
               ...prev,
@@ -156,10 +164,14 @@ export default function DashboardPage() {
       } catch (error) {
         console.error('Dashboard data loading error:', error)
         const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboard data'
-        setError(errorMessage)
-        toast.error(errorMessage)
+        if (mounted) {
+          setError(errorMessage)
+          toast.error(errorMessage)
+        }
       } finally {
-        setIsLoading(false)
+        if (mounted) {
+          setIsLoading(false)
+        }
       }
     }
 
@@ -167,11 +179,12 @@ export default function DashboardPage() {
 
     // Cleanup function
     return () => {
+      mounted = false
       if (customersChannel) customersChannel.unsubscribe()
       if (inventoryChannel) inventoryChannel.unsubscribe()
       if (invoicesChannel) invoicesChannel.unsubscribe()
     }
-  }, [router])
+  }, [])
 
   if (isLoading) {
     return (
