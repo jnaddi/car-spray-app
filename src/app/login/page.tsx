@@ -169,7 +169,15 @@ export default function LoginPage() {
         })
 
         toast.success("Login successful!")
-        router.push("/dashboard")
+        console.log("Attempting navigation to dashboard...")
+        try {
+          router.push("/dashboard")
+          console.log("Navigation initiated successfully")
+        } catch (navError) {
+          console.error("Navigation error:", navError)
+          // Fallback navigation
+          window.location.href = "/dashboard"
+        }
       }
     } catch (err) {
       console.error("Login error:", err)
