@@ -77,13 +77,13 @@ export default function DashboardPage() {
           { data: inventory, error: inventoryError },
           { data: invoices, error: invoicesError }
         ] = await Promise.all([
-          supabase.from("customers").select("*"),
-          supabase.from("inventory").select("*"),
+          supabase.from("customers").select("*") as Promise<{ data: Customer[] | null, error: any }>,
+          supabase.from("inventory").select("*") as Promise<{ data: InventoryItem[] | null, error: any }>,
           supabase.from("invoices").select(`
             *,
             customers(name),
             services(description, price)
-          `)
+          `) as Promise<{ data: Invoice[] | null, error: any }>
         ])
 
         // Check for any data fetching errors
@@ -113,50 +113,53 @@ export default function DashboardPage() {
     // Set up real-time subscriptions
     const customersSubscription = supabase
       .channel('customers_changes')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'customers' 
-      }, payload => {
-        setData(prev => ({
-          ...prev,
-          customers: prev.customers.map(customer => 
-            customer.id === payload.new.id ? payload.new : customer
-          )
-        }))
-      })
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'customers' },
+        (payload) => {
+          // Type assertion for payload.new as Customer
+          const newCustomer = payload.new as Customer
+          setData((prev) => ({
+            ...prev,
+            customers: prev.customers.map((customer) => 
+              customer.id === newCustomer.id ? newCustomer : customer
+            )
+          }))
+        }
+      )
       .subscribe()
 
     const inventorySubscription = supabase
       .channel('inventory_changes')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'inventory' 
-      }, payload => {
-        setData(prev => ({
-          ...prev,
-          inventory: prev.inventory.map(item => 
-            item.id === payload.new.id ? payload.new : item
-          )
-        }))
-      })
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'inventory' },
+        (payload) => {
+          // Type assertion for payload.new as InventoryItem
+          const newItem = payload.new as InventoryItem
+          setData((prev) => ({
+            ...prev,
+            inventory: prev.inventory.map((item) => 
+              item.id === newItem.id ? newItem : item
+            )
+          }))
+        }
+      )
       .subscribe()
 
     const invoicesSubscription = supabase
       .channel('invoices_changes')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'invoices' 
-      }, payload => {
-        setData(prev => ({
-          ...prev,
-          invoices: prev.invoices.map(invoice => 
-            invoice.id === payload.new.id ? payload.new : invoice
-          )
-        }))
-      })
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'invoices' },
+        (payload) => {
+          // Type assertion for payload.new as Invoice
+          const newInvoice = payload.new as Invoice
+          setData((prev) => ({
+            ...prev,
+            invoices: prev.invoices.map((invoice) => 
+              invoice.id === newInvoice.id ? newInvoice : invoice
+            )
+          }))
+        }
+      )
       .subscribe()
 
     // Cleanup subscriptions
@@ -191,7 +194,6 @@ export default function DashboardPage() {
     )
   }
 
-  // Render main dashboard
   return (
     <CarSprayApp
       initialCustomers={data.customers}
