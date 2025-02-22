@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import CarSprayApp from "@/components/CarSprayApp"
 import { toast } from "react-toastify"
-import { PostgrestError } from "@supabase/supabase-js"
 
 interface Customer {
   id: number
