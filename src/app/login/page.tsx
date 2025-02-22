@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "react-toastify"
 import { supabase } from "@/lib/supabase"
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 
 interface LoginCredentials {
   email: string
@@ -15,6 +16,7 @@ interface LoginCredentials {
 }
 
 export default function LoginPage() {
+  const router = useRouter()
   const [credentials, setCredentials] = useState<LoginCredentials>({
     email: "",
     password: "",
@@ -37,28 +39,46 @@ export default function LoginPage() {
     setError("")
 
     try {
-      if (!credentials.email.includes('@')) {
-        setError("Please enter a valid email address")
-        return
-      }
-
-      if (credentials.password.length < 6) {
-        setError("Password must be at least 6 characters long")
-        return
-      }
+      console.log("Login attempt starting...")
 
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: credentials.email,
         password: credentials.password,
       })
 
+      console.log("Auth response:", { 
+        success: !!data?.user, 
+        hasError: !!signInError,
+        error: signInError?.message 
+      })
+
       if (signInError) throw signInError
 
       if (data.user) {
-        toast.success("Login successful!")
-        const params = new URLSearchParams(window.location.search)
-        const redirectTo = params.get('redirectTo') || '/dashboard'
-        window.location.href = redirectTo
+        console.log("Login successful, verifying session...")
+        
+        // Verify session exists
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        console.log("Session check:", { 
+          hasSession: !!session,
+          userId: session?.user?.id 
+        })
+
+        if (session) {
+          toast.success("Login successful!")
+          console.log("Attempting navigation to dashboard...")
+          
+          // Try both navigation methods
+          try {
+            router.push('/dashboard')
+          } catch (navError) {
+            console.log("Router navigation failed, trying window.location...")
+            window.location.href = '/dashboard'
+          }
+        } else {
+          throw new Error("Session not established")
+        }
       }
     } catch (err) {
       console.error("Login error:", err)
@@ -68,10 +88,8 @@ export default function LoginPage() {
           setError("Invalid email or password")
         } else if (err.message.includes("Email not confirmed")) {
           setError("Please verify your email address")
-        } else if (err.message.includes("rate limit")) {
-          setError("Too many login attempts. Please try again later")
         } else {
-          setError("Login failed. Please try again")
+          setError(err.message)
         }
       } else {
         setError("An unexpected error occurred")
