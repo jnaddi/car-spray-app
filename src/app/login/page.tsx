@@ -1,6 +1,5 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { Car, Lock } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -8,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "react-toastify"
 import { supabase } from "@/lib/supabase"
+import { useState } from "react"
 
 interface LoginCredentials {
   email: string
@@ -19,34 +19,8 @@ export default function LoginPage() {
     email: "",
     password: "",
   })
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string>("")
-
-  // Check session only once on mount
-  useEffect(() => {
-    let mounted = true
-
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (mounted && session?.user) {
-          window.location.href = "/dashboard"
-        }
-      } catch (error) {
-        console.error("Auth check failed:", error)
-      } finally {
-        if (mounted) {
-          setIsLoading(false)
-        }
-      }
-    }
-    
-    checkAuth()
-
-    return () => {
-      mounted = false
-    }
-  }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -107,14 +81,6 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-red-600"></div>
-      </div>
-    )
   }
 
   return (
