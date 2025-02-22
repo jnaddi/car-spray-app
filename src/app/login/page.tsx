@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import { Car, Lock } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -22,7 +21,6 @@ export default function LoginPage() {
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string>("")
-  const router = useRouter()
 
   // Check if user is already logged in
   useEffect(() => {
@@ -86,8 +84,10 @@ export default function LoginPage() {
         const { data: { session } } = await supabase.auth.getSession()
         
         if (session) {
-          // Use window.location for a full page reload
-          window.location.href = "/dashboard"
+          // Check for redirect URL from middleware
+          const params = new URLSearchParams(window.location.search)
+          const redirectTo = params.get('redirectTo') || '/dashboard'
+          window.location.href = redirectTo
         } else {
           throw new Error("Session not established")
         }
