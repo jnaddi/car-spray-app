@@ -71,28 +71,23 @@ export default function DashboardPage() {
           return
         }
 
-        // Fetch all data in parallel with proper typing
+        // Fetch all data with proper typing
+        const customersPromise = supabase.from("customers").select("*")
+        const inventoryPromise = supabase.from("inventory").select("*")
+        const invoicesPromise = supabase.from("invoices").select(`
+          *,
+          customers(name),
+          services(description, price)
+        `)
+
         const [
           { data: customers, error: customersError },
           { data: inventory, error: inventoryError },
           { data: invoices, error: invoicesError }
         ] = await Promise.all([
-          supabase.from("customers").select("*") as Promise<{ 
-            data: Customer[] | null
-            error: PostgrestError | null 
-          }>,
-          supabase.from("inventory").select("*") as Promise<{ 
-            data: InventoryItem[] | null
-            error: PostgrestError | null 
-          }>,
-          supabase.from("invoices").select(`
-            *,
-            customers(name),
-            services(description, price)
-          `) as Promise<{ 
-            data: Invoice[] | null
-            error: PostgrestError | null 
-          }>
+          customersPromise,
+          inventoryPromise,
+          invoicesPromise
         ])
 
         if (customersError) throw customersError
@@ -100,9 +95,9 @@ export default function DashboardPage() {
         if (invoicesError) throw invoicesError
 
         setData({
-          customers: customers || [],
-          inventory: inventory || [],
-          invoices: invoices || []
+          customers: (customers as Customer[]) || [],
+          inventory: (inventory as InventoryItem[]) || [],
+          invoices: (invoices as Invoice[]) || []
         })
 
       } catch (error) {
