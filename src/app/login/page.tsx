@@ -1,6 +1,5 @@
 "use client"
 
-import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Car, Lock } from "lucide-react"
@@ -23,83 +22,32 @@ export default function LoginPage() {
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string>("")
-  const [supabaseStatus, setSupabaseStatus] = useState<string>("Checking Supabase connection...")
   const router = useRouter()
 
-  // Check session on mount
+  // Check if user is already logged in
   useEffect(() => {
-    async function checkSession() {
+    const checkAuth = async () => {
       try {
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession()
-        console.log("Initial session check:", {
-          hasSession: !!session,
-          timestamp: new Date().toISOString(),
-        })
-
-        if (session) {
-          console.log("Active session found, redirecting to dashboard")
-          router.push("/dashboard")
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) {
+          window.location.href = "/dashboard"
         }
-
-        if (error) {
-          console.error("Session check error:", error)
-        }
-      } catch (err) {
-        console.error("Session check failed:", err)
+      } catch (error) {
+        console.error("Auth check failed:", error)
       }
     }
-
-    checkSession()
-  }, [router])
-
-  // Test Supabase connection on component mount
-  useEffect(() => {
-    async function checkSupabase() {
-      try {
-        console.log("Environment check:", {
-          hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-          hasSupabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-          url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-        })
-
-        // Test Supabase connection
-        const { data, error } = await supabase.from("customers").select("count").limit(1)
-
-        if (error) {
-          console.error("Supabase connection error:", {
-            error,
-            message: error.message,
-            details: error.details,
-            hint: error.hint,
-          })
-          setSupabaseStatus(`Connection Error: ${error.message}`)
-          return
-        }
-
-        setSupabaseStatus("Supabase connected successfully")
-        console.log("Supabase connection test:", {
-          success: true,
-          data,
-          timestamp: new Date().toISOString(),
-        })
-      } catch (err) {
-        console.error("Supabase check error:", err)
-        setSupabaseStatus(`Connection Error: ${err instanceof Error ? err.message : "Unknown error"}`)
-      }
-    }
-
-    checkSupabase()
+    
+    checkAuth()
   }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setCredentials((prev) => ({
+    setCredentials(prev => ({
       ...prev,
       [name]: value,
     }))
+    // Clear error when user starts typing
+    if (error) setError("")
   }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -108,76 +56,60 @@ export default function LoginPage() {
     setError("")
 
     try {
-      console.log("Login attempt:", {
-        email: credentials.email,
-        timestamp: new Date().toISOString(),
-      })
+      // Validate email format
+      if (!credentials.email.includes('@')) {
+        setError("Please enter a valid email address")
+        setIsLoading(false)
+        return
+      }
 
-      console.log("Login attempt configuration:", {
-        supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
-        hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-        email: credentials.email,
-        timestamp: new Date().toISOString(),
-      })
+      // Validate password length
+      if (credentials.password.length < 6) {
+        setError("Password must be at least 6 characters long")
+        setIsLoading(false)
+        return
+      }
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: credentials.email,
         password: credentials.password,
       })
 
-      console.log("Auth response:", {
-        hasData: !!data,
-        hasUser: !!data?.user,
-        hasError: !!error,
-        timestamp: new Date().toISOString(),
-      })
-
-      if (error) {
-        console.error("Authentication error:", {
-          code: error.status,
-          message: error.message,
-          timestamp: new Date().toISOString(),
-        })
-
-        // Handle specific error cases
-        if (error.message.includes("Invalid login credentials")) {
-          setError("Invalid email or password")
-        } else if (error.message.includes("Email not confirmed")) {
-          setError("Please verify your email address")
-        } else {
-          setError(error.message)
-        }
-
-        toast.error("Login failed")
-        return
+      if (signInError) {
+        throw signInError
       }
 
       if (data.user) {
-        console.log("Login successful:", {
-          userId: data.user.id,
-          email: data.user.email,
-          timestamp: new Date().toISOString(),
-        })
-
-        // Verify session was created
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        console.log("Session after login:", {
-          hasSession: !!session,
-          timestamp: new Date().toISOString(),
-        })
-
         toast.success("Login successful!")
-        console.log("Attempting navigation to dashboard...")
-
-        // Using window.location.href for a hard navigation instead of router.push()
-        // This ensures a full page reload and proper session initialization
-        window.location.href = "/dashboard"
+        
+        // Verify session
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (session) {
+          // Use window.location for a full page reload
+          window.location.href = "/dashboard"
+        } else {
+          throw new Error("Session not established")
+        }
       }
     } catch (err) {
       console.error("Login error:", err)
-      setError("An unexpected error occurred")
+      
+      // Handle specific error messages
+      if (err instanceof Error) {
+        if (err.message.includes("Invalid login credentials")) {
+          setError("Invalid email or password")
+        } else if (err.message.includes("Email not confirmed")) {
+          setError("Please verify your email address")
+        } else if (err.message.includes("rate limit")) {
+          setError("Too many login attempts. Please try again later")
+        } else {
+          setError("Login failed. Please try again")
+        }
+      } else {
+        setError("An unexpected error occurred")
+      }
+      
       toast.error("Login failed")
     } finally {
       setIsLoading(false)
@@ -185,30 +117,19 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-      <Card className="w-96">
-        <CardHeader>
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-1">
           <div className="flex items-center gap-2 mb-2">
             <Car className="w-8 h-8 text-red-600" />
-            <span className="font-bold text-lg">BURGER SPRAYING SHOP</span>
+            <span className="font-bold text-xl">BURGER SPRAYING SHOP</span>
           </div>
-          <CardTitle>Login</CardTitle>
-          <CardDescription>Enter your credentials to access the system</CardDescription>
+          <CardTitle className="text-2xl">Login</CardTitle>
+          <CardDescription>
+            Enter your credentials to access the system
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Supabase Status Indicator */}
-          <div
-            className={`mb-4 p-2 rounded text-sm ${
-              supabaseStatus.includes("Error")
-                ? "bg-red-100 text-red-700"
-                : supabaseStatus.includes("successfully")
-                  ? "bg-green-100 text-green-700"
-                  : "bg-blue-100 text-blue-700"
-            }`}
-          >
-            {supabaseStatus}
-          </div>
-
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -216,28 +137,43 @@ export default function LoginPage() {
                 id="email"
                 name="email"
                 type="email"
-                required
                 placeholder="Enter your email"
                 value={credentials.email}
                 onChange={handleChange}
                 disabled={isLoading}
+                className="w-full"
+                required
+                autoComplete="email"
               />
             </div>
+            
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
                 name="password"
                 type="password"
-                required
                 placeholder="Enter your password"
                 value={credentials.password}
                 onChange={handleChange}
                 disabled={isLoading}
+                className="w-full"
+                required
+                autoComplete="current-password"
               />
             </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <Button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white" disabled={isLoading}>
+
+            {error && (
+              <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm">
+                {error}
+              </div>
+            )}
+
+            <Button 
+              type="submit" 
+              className="w-full bg-red-600 hover:bg-red-700 text-white transition-colors"
+              disabled={isLoading}
+            >
               <Lock className="w-4 h-4 mr-2" />
               {isLoading ? "Logging in..." : "Login"}
             </Button>
@@ -247,4 +183,3 @@ export default function LoginPage() {
     </div>
   )
 }
-
