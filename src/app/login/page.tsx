@@ -1,8 +1,7 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Car, Lock } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,7 +23,76 @@ export default function LoginPage() {
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string>("")
+  const [supabaseStatus, setSupabaseStatus] = useState<string>("Checking Supabase connection...")
   const router = useRouter()
+
+  // Check session on mount
+  useEffect(() => {
+    async function checkSession() {
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession()
+        console.log("Initial session check:", {
+          hasSession: !!session,
+          timestamp: new Date().toISOString(),
+        })
+
+        if (session) {
+          console.log("Active session found, redirecting to dashboard")
+          router.push("/dashboard")
+        }
+
+        if (error) {
+          console.error("Session check error:", error)
+        }
+      } catch (err) {
+        console.error("Session check failed:", err)
+      }
+    }
+
+    checkSession()
+  }, [router])
+
+  // Test Supabase connection on component mount
+  useEffect(() => {
+    async function checkSupabase() {
+      try {
+        console.log("Environment check:", {
+          hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+          hasSupabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+          url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+        })
+
+        // Test Supabase connection
+        const { data, error } = await supabase.from("customers").select("count").limit(1)
+
+        if (error) {
+          console.error("Supabase connection error:", {
+            error,
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+          })
+          setSupabaseStatus(`Connection Error: ${error.message}`)
+          return
+        }
+
+        setSupabaseStatus("Supabase connected successfully")
+        console.log("Supabase connection test:", {
+          success: true,
+          data,
+          timestamp: new Date().toISOString(),
+        })
+      } catch (err) {
+        console.error("Supabase check error:", err)
+        setSupabaseStatus(`Connection Error: ${err instanceof Error ? err.message : "Unknown error"}`)
+      }
+    }
+
+    checkSupabase()
+  }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -40,33 +108,59 @@ export default function LoginPage() {
     setError("")
 
     try {
-      console.log("Supabase client initialized:", !!supabase)
-      console.log("Attempting login with email:", credentials.email)
+      console.log("Login attempt:", {
+        email: credentials.email,
+        timestamp: new Date().toISOString(),
+      })
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email: credentials.email,
         password: credentials.password,
       })
 
-      console.log("Auth response:", { hasData: !!data, hasError: !!error })
-
       if (error) {
-        console.error("Login error details:", error)
-        throw error
+        console.error("Authentication error:", {
+          code: error.status,
+          message: error.message,
+          details: error.details,
+          timestamp: new Date().toISOString(),
+        })
+
+        // Handle specific error cases
+        if (error.message.includes("Invalid login credentials")) {
+          setError("Invalid email or password")
+        } else if (error.message.includes("Email not confirmed")) {
+          setError("Please verify your email address")
+        } else {
+          setError(error.message)
+        }
+
+        toast.error("Login failed")
+        return
       }
 
       if (data.user) {
-        console.log("Login successful, redirecting to dashboard")
+        console.log("Login successful:", {
+          userId: data.user.id,
+          email: data.user.email,
+          timestamp: new Date().toISOString(),
+        })
+
+        // Verify session was created
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        console.log("Session after login:", {
+          hasSession: !!session,
+          timestamp: new Date().toISOString(),
+        })
+
         toast.success("Login successful!")
         router.push("/dashboard")
       }
     } catch (err) {
-      console.error("Login error full details:", err)
-      if (err instanceof Error) {
-        setError(err.message)
-      } else {
-        setError("An error occurred during login")
-      }
+      console.error("Login error:", err)
+      setError("An unexpected error occurred")
       toast.error("Login failed")
     } finally {
       setIsLoading(false)
@@ -85,6 +179,19 @@ export default function LoginPage() {
           <CardDescription>Enter your credentials to access the system</CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Supabase Status Indicator */}
+          <div
+            className={`mb-4 p-2 rounded text-sm ${
+              supabaseStatus.includes("Error")
+                ? "bg-red-100 text-red-700"
+                : supabaseStatus.includes("successfully")
+                  ? "bg-green-100 text-green-700"
+                  : "bg-blue-100 text-blue-700"
+            }`}
+          >
+            {supabaseStatus}
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
