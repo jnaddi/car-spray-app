@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label"
 import { toast } from "react-toastify"
 import { supabase } from "@/lib/supabase"
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 
 interface LoginCredentials {
   email: string
@@ -16,7 +15,6 @@ interface LoginCredentials {
 }
 
 export default function LoginPage() {
-  const router = useRouter()
   const [credentials, setCredentials] = useState<LoginCredentials>({
     email: "",
     password: "",
@@ -69,12 +67,8 @@ export default function LoginPage() {
           toast.success("Login successful!")
           console.log("Attempting navigation to dashboard...")
           
-          try {
-            await router.push('/dashboard')
-          } catch {
-            console.log("Router navigation failed, trying window.location...")
-            window.location.href = '/dashboard'
-          }
+          // Force a hard refresh to the dashboard
+          window.location.replace('/dashboard')
         } else {
           throw new Error("Session not established")
         }
