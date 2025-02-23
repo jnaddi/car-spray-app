@@ -6,7 +6,12 @@ import { useRouter, useSearchParams } from "next/navigation"
 export default function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  // ... other state declarations remain the same
+  const [credentials, setCredentials] = useState<LoginCredentials>({
+    email: "",
+    password: "",
+  })
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string>("")
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -26,23 +31,29 @@ export default function LoginPage() {
         
         if (session) {
           toast.success("Login successful!")
-          
-          // Get the redirect URL from search params or default to dashboard
-          const redirectTo = searchParams.get('redirectTo') || '/dashboard'
-          
-          // Use Next.js router for navigation
+          const redirectTo = searchParams?.get('redirectTo') || '/dashboard'
           router.push(redirectTo)
-          router.refresh() // Force a refresh of the page
+          router.refresh()
         } else {
           throw new Error("Session not established")
         }
       }
-    } catch (err) {
-      // ... error handling remains the same
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred'
+      
+      if (errorMessage.includes("Invalid login credentials")) {
+        setError("Invalid email or password")
+      } else if (errorMessage.includes("Email not confirmed")) {
+        setError("Please verify your email address")
+      } else {
+        setError(errorMessage)
+      }
+      
+      toast.error("Login failed")
     } finally {
       setIsLoading(false)
     }
   }
 
-  // ... rest of the component remains the same
+  // Rest of the component remains the same...
 }
