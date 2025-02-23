@@ -8,16 +8,10 @@ export async function middleware(request: NextRequest) {
     const supabase = createMiddlewareClient({ req: request, res })
     const requestPath = request.nextUrl.pathname
 
-    // Await session and refresh token if needed
+    // Get and refresh session
     const {
-      data: { session },
-      error: sessionError
+      data: { session }
     } = await supabase.auth.getSession()
-
-    // Add session token to response headers if exists
-    if (session) {
-      res.headers.set('x-user-id', session.user.id)
-    }
 
     // Handle protected routes (no session)
     if (!session && isProtectedRoute(requestPath)) {
@@ -46,4 +40,4 @@ export async function middleware(request: NextRequest) {
   }
 }
 
-// ... rest of the helper functions remain the same
+// Rest of the helper functions remain the same...
