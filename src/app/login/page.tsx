@@ -1,35 +1,12 @@
 "use client"
 
-import { Car, Lock } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { toast } from "react-toastify"
-import { supabase } from "@/lib/supabase"
-import { useState } from "react"
-
-interface LoginCredentials {
-  email: string
-  password: string
-}
+import { useRouter, useSearchParams } from "next/navigation"
+// ... other imports remain the same
 
 export default function LoginPage() {
-  const [credentials, setCredentials] = useState<LoginCredentials>({
-    email: "",
-    password: "",
-  })
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string>("")
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setCredentials(prev => ({
-      ...prev,
-      [name]: value,
-    }))
-    if (error) setError("")
-  }
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  // ... other state declarations remain the same
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -37,127 +14,35 @@ export default function LoginPage() {
     setError("")
 
     try {
-      console.log("Login attempt starting...")
-
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: credentials.email,
         password: credentials.password,
       })
 
-      console.log("Auth response:", { 
-        success: !!data?.user, 
-        hasError: !!signInError,
-        error: signInError?.message 
-      })
-
       if (signInError) throw signInError
 
       if (data.user) {
-        console.log("Login successful, verifying session...")
-        
-        // Verify session exists
         const { data: { session } } = await supabase.auth.getSession()
         
-        console.log("Session check:", { 
-          hasSession: !!session,
-          userId: session?.user?.id 
-        })
-
         if (session) {
           toast.success("Login successful!")
-          console.log("Attempting navigation to dashboard...")
           
-          // Force a hard refresh to the dashboard
-          window.location.replace('/dashboard')
+          // Get the redirect URL from search params or default to dashboard
+          const redirectTo = searchParams.get('redirectTo') || '/dashboard'
+          
+          // Use Next.js router for navigation
+          router.push(redirectTo)
+          router.refresh() // Force a refresh of the page
         } else {
           throw new Error("Session not established")
         }
       }
     } catch (err) {
-      console.error("Login error:", err)
-      
-      if (err instanceof Error) {
-        if (err.message.includes("Invalid login credentials")) {
-          setError("Invalid email or password")
-        } else if (err.message.includes("Email not confirmed")) {
-          setError("Please verify your email address")
-        } else {
-          setError(err.message)
-        }
-      } else {
-        setError("An unexpected error occurred")
-      }
-      
-      toast.error("Login failed")
+      // ... error handling remains the same
     } finally {
       setIsLoading(false)
     }
   }
 
-  return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <div className="flex items-center gap-2 mb-2">
-            <Car className="w-8 h-8 text-red-600" />
-            <span className="font-bold text-xl">BURGER SPRAYING SHOP</span>
-          </div>
-          <CardTitle className="text-2xl">Login</CardTitle>
-          <CardDescription>
-            Enter your credentials to access the system
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="Enter your email"
-                value={credentials.email}
-                onChange={handleChange}
-                disabled={isLoading}
-                className="w-full"
-                required
-                autoComplete="email"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="Enter your password"
-                value={credentials.password}
-                onChange={handleChange}
-                disabled={isLoading}
-                className="w-full"
-                required
-                autoComplete="current-password"
-              />
-            </div>
-
-            {error && (
-              <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm">
-                {error}
-              </div>
-            )}
-
-            <Button 
-              type="submit" 
-              className="w-full bg-red-600 hover:bg-red-700 text-white transition-colors"
-              disabled={isLoading}
-            >
-              <Lock className="w-4 h-4 mr-2" />
-              {isLoading ? "Logging in..." : "Login"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  )
+  // ... rest of the component remains the same
 }
